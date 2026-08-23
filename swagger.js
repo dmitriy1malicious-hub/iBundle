@@ -5,7 +5,7 @@ const createOpenApiSpecification = (port) => ({
   info: {
     title: 'Shipment Labels API',
     version: '1.0.0',
-    description: 'Local shipment pricing, label creation, listing, and cancellation API.',
+    description: 'UniUni Canada live pricing and label creation API. Cancellation is local-only.',
   },
   servers: [{ url: `http://localhost:${port}` }],
   tags: [{ name: 'Shipments', description: 'Shipment and label lifecycle operations' }],
@@ -19,7 +19,7 @@ const createOpenApiSpecification = (port) => ({
           content: { 'application/json': { schema: { $ref: '#/components/schemas/PricingRequest' } } },
         },
         responses: {
-          201: { description: 'Rates calculated successfully' },
+          200: { description: 'Live rates returned and an opaque quoteKey created' },
           400: { $ref: '#/components/responses/BadRequest' },
         },
       },
@@ -27,13 +27,13 @@ const createOpenApiSpecification = (port) => ({
     '/api/shipments/labels': {
       post: {
         tags: ['Shipments'],
-        summary: 'Create a label from a selected rate',
+        summary: 'Create a real UniUni shipment and label from a quote',
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/LabelRequest' } } },
         },
         responses: {
-          201: { description: 'Label created successfully' },
+          201: { description: 'UniUni shipment and label created successfully' },
           400: { $ref: '#/components/responses/BadRequest' },
           404: { $ref: '#/components/responses/NotFound' },
           409: { $ref: '#/components/responses/Conflict' },
@@ -109,6 +109,8 @@ const createOpenApiSpecification = (port) => ({
         additionalProperties: true,
         properties: {
           name: { type: 'string' },
+          address: { type: 'string' },
+          postalCode: { type: 'string', description: 'Canadian postal code' },
           phone: { type: 'string' },
           email: { type: 'string', format: 'email' },
           location: { type: 'object', additionalProperties: true },
@@ -130,8 +132,8 @@ const createOpenApiSpecification = (port) => ({
         type: 'object',
         required: ['from', 'to', 'items', 'disMetrics'],
         properties: {
-          from: { $ref: '#/components/schemas/Location' },
-          to: { $ref: '#/components/schemas/Location' },
+          from: { allOf: [{ $ref: '#/components/schemas/Location' }], required: ['name', 'address', 'postalCode'] },
+          to: { allOf: [{ $ref: '#/components/schemas/Location' }], required: ['name', 'address', 'postalCode'] },
           items: { type: 'array', minItems: 1, items: { $ref: '#/components/schemas/ShipmentItem' } },
           disMetrics: {
             type: 'object',
@@ -154,9 +156,9 @@ const createOpenApiSpecification = (port) => ({
       },
       LabelRequest: {
         type: 'object',
-        required: ['shipmentId', 'buyKey'],
+        required: ['quoteKey', 'buyKey'],
         properties: {
-          shipmentId: { type: 'string' },
+          quoteKey: { type: 'string', description: 'Opaque quote token returned by pricing' },
           buyKey: { type: 'string' },
         },
       },

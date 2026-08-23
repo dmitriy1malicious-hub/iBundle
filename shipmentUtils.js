@@ -2,6 +2,10 @@ const createId = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(3
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
+const firstValue = (object, ...keys) => keys
+  .map((key) => object[key])
+  .find((value) => value !== undefined && value !== null && value !== '');
+
 const validateShipment = (shipment) => {
   if (!isObject(shipment)) {
     return 'shipment must be an object';
@@ -9,6 +13,13 @@ const validateShipment = (shipment) => {
 
   if (!isObject(shipment.from) || !isObject(shipment.to)) {
     return 'shipment.from and shipment.to are required objects';
+  }
+
+  if (!firstValue(shipment.from, 'postalCode', 'postal_code')
+    || !firstValue(shipment.to, 'postalCode', 'postal_code')
+    || !firstValue(shipment.from, 'address', 'location')
+    || !firstValue(shipment.to, 'address', 'location')) {
+    return 'shipment.from and shipment.to require postalCode and address';
   }
 
   if (!Array.isArray(shipment.items) || shipment.items.length === 0) {
@@ -39,6 +50,38 @@ const validateShipment = (shipment) => {
   }
 
   return null;
+};
+
+const toUniUniShipment = (shipment, customerId) => {
+  const fromPostalCode = firstValue(shipment.from, 'postalCode', 'postal_code');
+  const toPostalCode = firstValue(shipment.to, 'postalCode', 'postal_code');
+  const fromAddress = firstValue(shipment.from, 'address', 'location');
+  const toAddress = firstValue(shipment.to, 'address', 'location');
+  const dimensions = shipment.disMetrics;
+
+  return {
+    customer_id: customerId,
+    start_postal_code: fromPostalCode,
+    postal_code: toPostalCode,
+    length: String(dimensions.length),
+    width: String(dimensions.width),
+    height: String(dimensions.height),
+    weight: String(dimensions.weight),
+    weight_uom: (dimensions.weightSys || 'LBS').toUpperCase(),
+    customer_no: customerId,
+    sender: shipment.from.name,
+    start_phone: shipment.from.phone || '',
+    pickup_address: typeof fromAddress === 'string' ? fromAddress : fromAddress.address,
+    receiver: shipment.to.name,
+    delivery_address: typeof toAddress === 'string' ? toAddress : toAddress.address,
+    delivery_unit_no: shipment.to.unit || shipment.to.unitNo || '',
+    receiver_phone: shipment.to.phone || '',
+    receiver_email: shipment.to.email || '',
+    total_value: String(shipment.items.reduce((total, item) => total + (Number(item.qty) * Number(item.price)), 0)),
+    currency: shipment.items[0].currency || 'CAD',
+    item_description: shipment.items.map((item) => `${item.name} x${item.qty}`).join(', '),
+    require_signature: Boolean(shipment.requireSignature),
+  };
 };
 
 const calculateRates = (shipment, requestKey) => {
@@ -80,4 +123,4 @@ const calculateRates = (shipment, requestKey) => {
   ];
 };
 
-module.exports = { calculateRates, createId, validateShipment };
+module.exports = { calculateRates, createId, validateShipment, toUniUniShipment };

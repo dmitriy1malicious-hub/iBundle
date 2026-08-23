@@ -1,6 +1,6 @@
 # Shipment Labels API
 
-A local Express mock API for getting shipment pricing, creating labels, listing remembered shipments, and cancelling labels.
+An Express API backed by UniUni Canada production for live shipment pricing and real label creation. Cancellation remains local-only by design.
 
 ## Setup
 
@@ -34,16 +34,20 @@ Use **Try it out** in Swagger UI to send requests.
 
 ### 1. Get pricing
 
-Call `POST /api/shipments/pricing` with a `shipment` object. Each item requires `name`, `qty`, and `price`. Package dimensions require positive `weight`, `length`, `width`, and `height` values.
+Call `POST /api/shipments/pricing` with a `shipment` object. Each item requires `name`, `qty`, and `price`; sender and recipient require `name`, `address`, and Canadian `postalCode`. Package dimensions require positive `weight`, `length`, `width`, and `height` values.
 
 ```json
 {
   "shipment": {
     "from": {
-      "name": "Sender"
+    "name": "Sender",
+    "address": "10271 Shellbridge Way, Richmond, BC",
+    "postalCode": "V6X 2W8"
     },
     "to": {
-      "name": "Recipient"
+    "name": "Recipient",
+    "address": "65 Front Street West, Toronto, ON",
+    "postalCode": "M5J 1E6"
     },
     "items": [
       {
@@ -73,20 +77,20 @@ curl -X POST http://localhost:3000/api/shipments/pricing \
   -d @MOCK_SHIPMENT
 ```
 
-The response contains a generated `shipmentId` and a list of rates. Save the `shipmentId` and one rate's `buyKey` for the next step.
+The response contains a server-held `quoteKey` and live UniUni rates. Pricing does not create a shipment or shipment ID. Save the `quoteKey` and one rate's `buyKey` for the next step.
 
 ### 2. Create a label
 
-Call `POST /api/shipments/labels` with the saved `shipmentId` and selected `buyKey`:
+Call `POST /api/shipments/labels` with the saved `quoteKey` and selected `buyKey`:
 
 ```json
 {
-  "shipmentId": "shipment_123_abc",
-  "buyKey": "request_123_standard"
+  "quoteKey": "quote_123_abc",
+  "buyKey": "quote_123_abc_uniuni"
 }
 ```
 
-The response contains the created label, tracking code, selected rate, and `labelData`.
+The response contains the real UniUni shipment, tracking code, selected rate, and PDF `labelData`. The local shipment record is created only after both provider calls succeed.
 
 ### 3. List shipments
 
@@ -120,8 +124,8 @@ The shipment status changes to `cancelled`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/shipments/pricing` | Calculate mock shipment rates |
-| `POST` | `/api/shipments/labels` | Create a mock label from a selected rate |
+| `POST` | `/api/shipments/pricing` | Get live UniUni rates without creating a shipment |
+| `POST` | `/api/shipments/labels` | Create a real UniUni shipment and label from a quote |
 | `GET` | `/api/shipments` | List remembered shipments |
 | `GET` | `/api/shipments/:shipmentId` | Get one shipment |
 | `GET` | `/api/shipments/:shipmentId/label` | Get one label |
@@ -129,11 +133,11 @@ The shipment status changes to `cancelled`.
 
 ## Important Notes
 
-- This is a local mock implementation; it does not call the real API.
+- UniUni Canada production is used through `https://sj.uniexpress.ca`.
+- Configure `UNIUNI_CLIENT_ID`, `UNIUNI_CLIENT_SECRET`, and `UNIUNI_CUSTOMER_ID` in `.env`.
 - Shipment data is stored in process memory and is lost when the server restarts.
-- Always call pricing first and use the returned local `shipmentId` and `buyKey`.
-- An external `shipmentId` cannot be used with this local mock API.
-- The generated label data is a mock base64 value, not a real shipping label PDF.
+- Quotes expire after 15 minutes by default. Always call pricing first and use the returned `quoteKey` and `buyKey`.
+- Cancellation changes only the local status and does not call UniUni.
 
 ## Development
 

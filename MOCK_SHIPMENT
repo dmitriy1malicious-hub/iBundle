@@ -1,10 +1,14 @@
 {
   "shipment": {
     "from": {
-      "name": "Sender"
+      "name": "Sender",
+      "address": "10271 Shellbridge Way, Richmond, BC",
+      "postalCode": "V6X 2W8"
     },
     "to": {
-      "name": "Recipient"
+      "name": "Recipient",
+      "address": "65 Front Street West, Toronto, ON",
+      "postalCode": "M5J 1E6"
     },
     "items": [
       {

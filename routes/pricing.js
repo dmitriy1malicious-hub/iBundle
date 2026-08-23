@@ -1,10 +1,11 @@
 const express = require('express');
-const shipments = require('../shipmentStore');
-const { calculateRates, createId, validateShipment } = require('../shipmentUtils');
+const { createId, validateShipment, toUniUniShipment } = require('../shipmentUtils');
+const { saveQuote, countQuotes } = require('../quoteStore');
+const { estimateShipping } = require('../uniuniClient');
 
 const router = express.Router();
 
-router.post('/api/shipments/pricing', (req, res) => {
+router.post('/api/shipments/pricing', async (req, res) => {
   const { shipment } = req.body;
   const validationError = validateShipment(shipment);
 
@@ -12,23 +13,27 @@ router.post('/api/shipments/pricing', (req, res) => {
     return res.status(400).json({ ok: 0, error: validationError });
   }
 
-  const shipmentId = createId('shipment');
-  const requestKey = createId('request');
-  const rates = calculateRates(shipment, requestKey);
-  const now = new Date().toISOString();
+  try {
+    const quoteKey = createId('quote');
+    const providerRequest = toUniUniShipment(shipment, process.env.UNIUNI_CUSTOMER_ID || '2125');
+    const providerResponse = await estimateShipping(providerRequest);
+    const providerRate = providerResponse.data || providerResponse;
+    const total = Number(providerRate.totalAfterTax || providerRate.totalBeforeTax || providerRate.shippingCharge);
+    const rate = {
+      id: createId('rate'),
+      buyKey: `${quoteKey}_uniuni`,
+      rate: total,
+      currency: providerRate.currency || 'CAD',
+      total,
+      provider: 'uniuni',
+      providerRate,
+    };
 
-  shipments.set(shipmentId, {
-    shipmentId,
-    shipment,
-    requestKey,
-    rates,
-    status: 'pending',
-    createdAt: now,
-    updatedAt: now,
-    label: null,
-  });
-
-  return res.status(201).json({ ok: 1, shipmentId, requestKey, rates });
+    saveQuote(quoteKey, { shipment, providerRequest, rates: [rate] });
+    return res.status(200).json({ ok: 1, quoteKey, rates: [rate], quoteCount: countQuotes() });
+  } catch (error) {
+    return res.status(error.statusCode || 502).json({ ok: 0, error: error.message, details: error.details });
+  }
 });
 
 module.exports = router;
