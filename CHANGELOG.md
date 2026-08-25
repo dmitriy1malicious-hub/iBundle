@@ -2,6 +2,15 @@
 
 All notable committed changes to this project are documented here.
 
+## `0f48aab` - refactor(fetch): added axios
+
+### Changed
+
+- Replaced the unsupported Node.js `fetch` implementation with `axios` for UniUni API requests.
+- Preserved JSON response handling, UniUni business-error handling, and base64 PDF label processing.
+- Documented the pricing-then-label request flow using the returned `quoteKey` and `buyKey`.
+- Documented `GET /api/shipments/:shipmentId/label` for retrieving a generated label and decoding its Base64 data into a PDF.
+
 ## 2026-08-23
 
 ### `b1886a9` - feat(label): uniuni canada flow
