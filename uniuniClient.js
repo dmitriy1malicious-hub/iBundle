@@ -1,3 +1,5 @@
+const axios = require('axios');
+
 const BASE_URL = process.env.UNIUNI_BASE_URL || 'https://sj.uniexpress.ca';
 const CLIENT_ID = process.env.UNIUNI_CLIENT_ID;
 const CLIENT_SECRET = process.env.UNIUNI_CLIENT_SECRET;
@@ -15,44 +17,52 @@ class UniUniError extends Error {
 }
 
 const request = async (path, options = {}) => {
-  const { responseType, ...fetchOptions } = options;
-  const response = await fetch(`${BASE_URL}${path}`, {
-    ...fetchOptions,
+  const { responseType, method, body, headers } = options;
+  const response = await axios({
+    url: `${BASE_URL}${path}`,
+    method,
+    data: body,
+    responseType: responseType === 'label' ? 'arraybuffer' : 'json',
+    validateStatus: () => true,
     headers: {
       Accept: 'application/json',
-      ...(fetchOptions.body ? { 'Content-Type': 'application/json' } : {}),
-      ...(fetchOptions.headers || {}),
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(headers || {}),
     },
   });
 
-  const contentType = response.headers.get('content-type') || '';
+  const contentType = response.headers['content-type'] || '';
   if (responseType === 'label' && !contentType.includes('application/json')) {
-    const labelData = Buffer.from(await response.arrayBuffer()).toString('base64');
-    if (!response.ok) {
+    const labelData = Buffer.from(response.data).toString('base64');
+    if (response.status < 200 || response.status >= 300) {
       throw new UniUniError('UniUni request failed', response.status, { contentType });
     }
     return { data: labelData, encoding: 'base64', contentType };
   }
 
-  const text = await response.text();
-  let body;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = text;
+  const responseBody = Buffer.isBuffer(response.data)
+    ? response.data.toString('utf8')
+    : response.data;
+  let parsedBody = responseBody;
+  if (typeof responseBody === 'string') {
+    try {
+      parsedBody = responseBody ? JSON.parse(responseBody) : null;
+    } catch {
+      parsedBody = responseBody;
+    }
   }
 
-  if (body && !Array.isArray(body)
-    && (body.status !== undefined || body.err_code !== undefined)
-    && (body.status !== 'SUCCESS' || Number(body.err_code) !== 0)) {
-    throw new UniUniError('UniUni request returned a business error', 502, body);
+  if (parsedBody && !Array.isArray(parsedBody)
+    && (parsedBody.status !== undefined || parsedBody.err_code !== undefined)
+    && (parsedBody.status !== 'SUCCESS' || Number(parsedBody.err_code) !== 0)) {
+    throw new UniUniError('UniUni request returned a business error', 502, parsedBody);
   }
 
-  if (!response.ok) {
-    throw new UniUniError('UniUni request failed', response.status, body);
+  if (response.status < 200 || response.status >= 300) {
+    throw new UniUniError('UniUni request failed', response.status, parsedBody);
   }
 
-  return body;
+  return parsedBody;
 };
 
 const getToken = async () => {
